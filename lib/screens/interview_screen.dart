@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:rive/rive.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../models/applicant_info.dart';
+import '../services/gemini_live_interview_service.dart';
 
 class InterviewScreen extends StatefulWidget {
   const InterviewScreen({super.key, required this.applicantInfo});
@@ -16,37 +20,39 @@ class InterviewScreen extends StatefulWidget {
 }
 
 class _InterviewScreenState extends State<InterviewScreen> {
+  static const Duration _submitGraceDuration = Duration(seconds: 5);
+
   final ScrollController _scrollController = ScrollController();
+  final stt.SpeechToText _speechToText = stt.SpeechToText();
+  final GeminiLiveInterviewService _geminiService =
+      GeminiLiveInterviewService();
+  Timer? _submitGraceTimer;
 
   File? _riveFile;
   RiveWidgetController? _controller;
   BooleanInput? _isTalkingInput;
 
   bool _isLoading = true;
+  bool _speechEnabled = false;
+  bool _isListening = false;
+  bool _isFinalizingSpeech = false;
   bool _isWaitingInterviewer = false;
-  bool _isCompleted = false;
+  bool _isWaitingSubmitGrace = false;
 
-  int _turnIndex = 0;
+  String _currentAnswerText = '';
+  String? _speechErrorMessage;
+  String? _geminiErrorMessage;
+  int? _activeInterviewerMessageIndex;
 
   final List<_InterviewMessage> _messages = [];
-
-  final List<String> _sampleAnswers = const [
-    '안녕하세요. 저는 사용자 경험을 중요하게 생각하는 개발자입니다.\nFlutter를 활용해 앱 화면과 상태 관리를 구성한 경험이 있습니다.\n입사 후에는 빠르게 적응해서 서비스 품질을 높이는 데 기여하고 싶습니다.',
-    '프로젝트에서는 PDF를 기반으로 퀴즈를 생성하고 결과를 분석하는 기능을 만들었습니다.\n특히 사용자의 풀이 기록을 저장하고 점수와 평균 시간을 보여주는 구조를 고민했습니다.\n데이터 모델을 분리해서 나중에 확장하기 쉽게 만드는 데 집중했습니다.',
-    '어려웠던 점은 여러 화면에서 상태가 바뀔 때 UI를 안정적으로 동기화하는 부분이었습니다.\n그래서 Provider 구조를 정리하고 필요한 화면만 다시 빌드되도록 개선했습니다.\n그 과정에서 코드 구조와 유지보수성의 중요성을 배웠습니다.',
-  ];
-
-  final List<String> _sampleReplies = const [
-    '좋습니다. Flutter 프로젝트에서 상태 관리를 Riverpod으로 선택한 이유를 설명해볼 수 있을까요?',
-    '좋은 경험이네요. 모델을 분리할 때 어떤 기준으로 테이블이나 클래스를 나누었는지 조금 더 구체적으로 말해볼까요?',
-    '좋습니다. 마지막으로 본인이 이 회사에 들어와서 가장 빠르게 기여할 수 있는 부분은 무엇이라고 생각하나요?',
-  ];
 
   @override
   void initState() {
     super.initState();
+    _geminiService.addListener(_handleGeminiChanged);
     _loadRive();
     _initMessages();
+    _initSpeech();
   }
 
   void _initMessages() {
@@ -94,6 +100,7 @@ class _InterviewScreenState extends State<InterviewScreen> {
       stateMachineSelector: StateMachineSelector.byName('State Machine'),
     );
 
+    // ignore: deprecated_member_use
     final isTalkingInput = controller.stateMachine.boolean('isTalking');
     isTalkingInput?.value = false;
 
@@ -107,50 +114,218 @@ class _InterviewScreenState extends State<InterviewScreen> {
     });
   }
 
+  Future<void> _initSpeech() async {
+    final enabled = await _speechToText.initialize(
+      onStatus: (status) {
+        if (status == stt.SpeechToText.doneStatus ||
+            status == stt.SpeechToText.notListeningStatus) {
+          if (_isListening) {
+            _scheduleSubmitAfterGrace();
+          }
+        }
+      },
+      onError: (error) {
+        if (!mounted) return;
+
+        _submitGraceTimer?.cancel();
+        _submitGraceTimer = null;
+
+        setState(() {
+          _isListening = false;
+          _isFinalizingSpeech = false;
+          _isWaitingSubmitGrace = false;
+          _speechErrorMessage = error.errorMsg;
+        });
+      },
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      _speechEnabled = enabled;
+    });
+  }
+
   Future<void> _handleMicTap() async {
-    if (_isWaitingInterviewer || _isCompleted) return;
-    if (_turnIndex >= _sampleAnswers.length) return;
+    if (_isWaitingInterviewer) return;
+
+    if (_isListening || _isWaitingSubmitGrace) {
+      await _finishListeningAndSubmit();
+      return;
+    }
+
+    await _startListening();
+  }
+
+  Future<void> _startListening() async {
+    _submitGraceTimer?.cancel();
+    _submitGraceTimer = null;
+
+    if (!_geminiService.hasApiKey) {
+      setState(() {
+        _geminiErrorMessage =
+            'GEMINI_API_KEY가 설정되지 않았습니다. --dart-define으로 API 키를 전달해주세요.';
+      });
+      return;
+    }
+
+    if (!_speechEnabled) {
+      await _initSpeech();
+    }
+
+    if (!_speechToText.isAvailable) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('음성 인식을 사용할 수 없습니다.')));
+      return;
+    }
 
     setState(() {
-      _messages.add(
-        _InterviewMessage(
-          isInterviewer: false,
-          text: _sampleAnswers[_turnIndex],
-        ),
-      );
+      _isListening = true;
+      _isFinalizingSpeech = false;
+      _isWaitingSubmitGrace = false;
+      _currentAnswerText = '';
+      _speechErrorMessage = null;
+      _geminiErrorMessage = null;
+    });
+
+    await _speechToText.listen(
+      localeId: 'ko_KR',
+      listenFor: const Duration(seconds: 90),
+      pauseFor: _submitGraceDuration,
+      listenOptions: stt.SpeechListenOptions(
+        partialResults: true,
+        listenMode: stt.ListenMode.dictation,
+        cancelOnError: true,
+      ),
+      onResult: (result) {
+        if (!mounted) return;
+
+        setState(() {
+          _currentAnswerText = result.recognizedWords;
+        });
+
+        if (result.recognizedWords.trim().isNotEmpty) {
+          _scheduleSubmitAfterGrace();
+        }
+      },
+    );
+  }
+
+  void _scheduleSubmitAfterGrace() {
+    if (_isFinalizingSpeech || _isWaitingInterviewer) {
+      return;
+    }
+
+    final answerText = _currentAnswerText.trim();
+    _submitGraceTimer?.cancel();
+    _submitGraceTimer = null;
+
+    if (!mounted) return;
+
+    setState(() {
+      _isListening = _speechToText.isListening;
+      _isWaitingSubmitGrace = answerText.isNotEmpty;
+    });
+
+    if (answerText.isEmpty) return;
+
+    _submitGraceTimer = Timer(_submitGraceDuration, () {
+      unawaited(_finishListeningAndSubmit());
+    });
+  }
+
+  Future<void> _finishListeningAndSubmit() async {
+    if (_isFinalizingSpeech) return;
+
+    _submitGraceTimer?.cancel();
+    _submitGraceTimer = null;
+
+    _isFinalizingSpeech = true;
+    final answerText = _currentAnswerText.trim();
+
+    if (_speechToText.isListening) {
+      await _speechToText.stop();
+    }
+
+    if (!mounted) {
+      _isFinalizingSpeech = false;
+      return;
+    }
+
+    setState(() {
+      _isListening = false;
+      _isWaitingSubmitGrace = false;
+    });
+
+    if (answerText.isEmpty) {
+      setState(() {
+        _isFinalizingSpeech = false;
+      });
+      return;
+    }
+
+    await _submitAnswer(answerText);
+
+    if (!mounted) return;
+    setState(() {
+      _isFinalizingSpeech = false;
+    });
+  }
+
+  Future<void> _submitAnswer(String answerText) async {
+    setState(() {
+      _messages.add(_InterviewMessage(isInterviewer: false, text: answerText));
+      _currentAnswerText = '';
       _isWaitingInterviewer = true;
+      _activeInterviewerMessageIndex = null;
+      _geminiErrorMessage = null;
     });
 
     _scrollToBottom();
 
-    await Future.delayed(const Duration(milliseconds: 500));
+    await _geminiService.sendUserText(
+      text: answerText,
+      applicantInfo: widget.applicantInfo,
+    );
+  }
+
+  void _handleGeminiChanged() {
+    final liveState = _geminiService.state;
+    _isTalkingInput?.value = liveState.isAiSpeaking;
 
     if (!mounted) return;
 
-    _isTalkingInput?.value = true;
-
     setState(() {
-      _messages.add(
-        _InterviewMessage(
-          isInterviewer: true,
-          text: _sampleReplies[_turnIndex],
-        ),
-      );
+      _isWaitingInterviewer = liveState.isBusy;
+      _geminiErrorMessage = liveState.errorMessage;
+
+      final responseText = liveState.currentResponseText.trim();
+      if (responseText.isNotEmpty) {
+        final activeIndex = _activeInterviewerMessageIndex;
+        if (activeIndex == null ||
+            activeIndex < 0 ||
+            activeIndex >= _messages.length ||
+            !_messages[activeIndex].isInterviewer) {
+          _messages.add(
+            _InterviewMessage(isInterviewer: true, text: responseText),
+          );
+          _activeInterviewerMessageIndex = _messages.length - 1;
+        } else {
+          _messages[activeIndex] = _messages[activeIndex].copyWith(
+            text: responseText,
+          );
+        }
+      }
+
+      if (!liveState.isBusy) {
+        _activeInterviewerMessageIndex = null;
+      }
     });
 
     _scrollToBottom();
-
-    await Future.delayed(const Duration(milliseconds: 900));
-
-    if (!mounted) return;
-
-    _isTalkingInput?.value = false;
-
-    setState(() {
-      _turnIndex += 1;
-      _isWaitingInterviewer = false;
-      _isCompleted = _turnIndex >= _sampleAnswers.length;
-    });
   }
 
   void _scrollToBottom() {
@@ -167,6 +342,10 @@ class _InterviewScreenState extends State<InterviewScreen> {
 
   @override
   void dispose() {
+    _submitGraceTimer?.cancel();
+    _speechToText.cancel();
+    _geminiService.removeListener(_handleGeminiChanged);
+    _geminiService.dispose();
     _scrollController.dispose();
     _isTalkingInput?.dispose();
     _controller?.dispose();
@@ -177,6 +356,7 @@ class _InterviewScreenState extends State<InterviewScreen> {
   @override
   Widget build(BuildContext context) {
     final controller = _controller;
+    final canUseMic = !_isWaitingInterviewer;
 
     return Scaffold(
       appBar: AppBar(
@@ -238,9 +418,20 @@ class _InterviewScreenState extends State<InterviewScreen> {
                       _MessageBubble(message: message),
                       const SizedBox(height: 12),
                     ],
+                    if (_isListening || _isWaitingSubmitGrace) ...[
+                      _ListeningDraftBubble(text: _currentAnswerText),
+                      const SizedBox(height: 12),
+                    ],
                     if (_isWaitingInterviewer) ...[
                       const SizedBox(height: 4),
                       const _InterviewerTypingIndicator(),
+                    ],
+                    if (_speechErrorMessage != null ||
+                        _geminiErrorMessage != null) ...[
+                      const SizedBox(height: 12),
+                      _ErrorNotice(
+                        message: _speechErrorMessage ?? _geminiErrorMessage!,
+                      ),
                     ],
                   ],
                 ),
@@ -251,50 +442,60 @@ class _InterviewScreenState extends State<InterviewScreen> {
               child: Column(
                 children: [
                   GestureDetector(
-                    onTap: _isWaitingInterviewer || _isCompleted
-                        ? null
-                        : _handleMicTap,
+                    onTap: canUseMic ? _handleMicTap : null,
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 180),
                       width: 72,
                       height: 72,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: _isCompleted
-                            ? const Color(0xFFF0EFFF)
-                            : _isWaitingInterviewer
+                        color: _isWaitingInterviewer
                             ? const Color(0xFFE5E7EB)
+                            : _isWaitingSubmitGrace
+                            ? const Color(0xFFFFF7ED)
+                            : _isListening
+                            ? const Color(0xFFFFE5E5)
                             : const Color(0xFF6C63FF),
                         border: Border.all(
-                          color: _isCompleted
-                              ? const Color(0xFF6C63FF)
-                              : _isWaitingInterviewer
+                          color: _isWaitingInterviewer
                               ? const Color(0xFFD1D5DB)
+                              : _isWaitingSubmitGrace
+                              ? const Color(0xFFF59E0B)
+                              : _isListening
+                              ? const Color(0xFFFF4D4D)
                               : const Color(0xFF6C63FF),
                           width: 1.5,
                         ),
                       ),
                       child: Icon(
-                        _isCompleted
-                            ? Icons.check_rounded
-                            : _isWaitingInterviewer
+                        _isWaitingInterviewer
                             ? Icons.hourglass_top_rounded
+                            : _isWaitingSubmitGrace
+                            ? Icons.send_rounded
+                            : _isListening
+                            ? Icons.send_rounded
                             : Icons.mic_rounded,
                         size: 34,
-                        color: _isCompleted
-                            ? const Color(0xFF6C63FF)
-                            : _isWaitingInterviewer
+                        color: _isWaitingInterviewer
                             ? Colors.black45
+                            : _isWaitingSubmitGrace
+                            ? const Color(0xFFF59E0B)
+                            : _isListening
+                            ? const Color(0xFFFF4D4D)
                             : Colors.white,
                       ),
                     ),
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    _isCompleted
-                        ? '테스트 대화 완료'
-                        : _isWaitingInterviewer
+                    _isWaitingInterviewer
                         ? '면접관이 답변 중입니다'
+                        : _isWaitingSubmitGrace
+                        ? _isListening
+                              ? '멈추면 5초 뒤 전송 · 탭해서 바로 전송'
+                              : '5초 뒤 전송됩니다 · 탭해서 바로 전송'
+                        : _isListening
+                        ? '탭해서 답변 전송'
                         : '탭해서 답변하기',
                     style: const TextStyle(
                       fontSize: 13,
@@ -317,6 +518,13 @@ class _InterviewMessage {
 
   final bool isInterviewer;
   final String text;
+
+  _InterviewMessage copyWith({String? text}) {
+    return _InterviewMessage(
+      isInterviewer: isInterviewer,
+      text: text ?? this.text,
+    );
+  }
 }
 
 class _MessageBubble extends StatelessWidget {
@@ -381,6 +589,48 @@ class _MessageBubble extends StatelessWidget {
   }
 }
 
+class _ListeningDraftBubble extends StatelessWidget {
+  const _ListeningDraftBubble({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final displayText = text.trim().isEmpty ? '음성을 인식하고 있습니다...' : text;
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Flexible(
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEDEBFF),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFFCCC7FF)),
+            ),
+            child: Text(
+              displayText,
+              style: const TextStyle(
+                fontSize: 15,
+                color: Color(0xFF3D348B),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        const CircleAvatar(
+          radius: 16,
+          backgroundColor: Color(0xFF6C63FF),
+          child: Icon(Icons.graphic_eq_rounded, size: 18, color: Colors.white),
+        ),
+      ],
+    );
+  }
+}
+
 class _InterviewerTypingIndicator extends StatelessWidget {
   const _InterviewerTypingIndicator();
 
@@ -403,6 +653,34 @@ class _InterviewerTypingIndicator extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ErrorNotice extends StatelessWidget {
+  const _ErrorNotice({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF1F2),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFFECACA)),
+      ),
+      child: Text(
+        message,
+        style: const TextStyle(
+          fontSize: 13,
+          height: 1.4,
+          color: Color(0xFFB91C1C),
+          fontWeight: FontWeight.w700,
+        ),
+      ),
     );
   }
 }

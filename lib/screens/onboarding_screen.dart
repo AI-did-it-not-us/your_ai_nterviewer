@@ -146,10 +146,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       interviewGoal: _selectedGoal.title,
     );
 
-    context.goNamed(
-      InterviewScreen.routeName,
-      extra: applicantInfo,
-    );
+    context.goNamed(InterviewScreen.routeName, extra: applicantInfo);
   }
 
   @override
@@ -161,10 +158,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _TopProgress(
-              currentIndex: _currentIndex,
-              totalCount: 5,
-            ),
+            _TopProgress(currentIndex: _currentIndex, totalCount: 5),
             Expanded(
               child: PageView(
                 controller: _pageController,
@@ -191,7 +185,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                               });
                             },
                           ),
-                          if (interviewer != _interviewers.last) const SizedBox(height: 12),
+                          if (interviewer != _interviewers.last)
+                            const SizedBox(height: 12),
                         ],
                       ],
                     ),
@@ -247,7 +242,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         _SummaryCard(
                           title: '면접관',
                           value:
-                          '${_selectedInterviewer.name} · ${_selectedInterviewer.type}',
+                              '${_selectedInterviewer.name} · ${_selectedInterviewer.type}',
                           icon: Icons.person_rounded,
                         ),
                         const SizedBox(height: 12),
@@ -309,10 +304,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 }
 
 class _TopProgress extends StatelessWidget {
-  const _TopProgress({
-    required this.currentIndex,
-    required this.totalCount,
-  });
+  const _TopProgress({required this.currentIndex, required this.totalCount});
 
   final int currentIndex;
   final int totalCount;
@@ -384,10 +376,7 @@ class _OnboardingPage extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             description,
-            style: const TextStyle(
-              fontSize: 15,
-              color: Colors.black54,
-            ),
+            style: const TextStyle(fontSize: 15, color: Colors.black54),
           ),
           const SizedBox(height: 28),
           child,
@@ -456,9 +445,7 @@ class _InterviewerCard extends StatelessWidget {
           SizedBox(
             height: 130,
             child: Center(
-              child: _InterviewerRivePreview(
-                rivePath: option.rivePath,
-              ),
+              child: _InterviewerRivePreview(rivePath: option.rivePath),
             ),
           ),
           const SizedBox(height: 12),
@@ -485,10 +472,7 @@ class _InterviewerCard extends StatelessWidget {
             textAlign: TextAlign.center,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 12,
-              color: Colors.black54,
-            ),
+            style: const TextStyle(fontSize: 12, color: Colors.black54),
           ),
         ],
       ),
@@ -497,9 +481,7 @@ class _InterviewerCard extends StatelessWidget {
 }
 
 class _InterviewerRivePreview extends StatefulWidget {
-  const _InterviewerRivePreview({
-    required this.rivePath,
-  });
+  const _InterviewerRivePreview({required this.rivePath});
 
   final String rivePath;
 
@@ -554,16 +536,11 @@ class _InterviewerRivePreviewState extends State<_InterviewerRivePreview> {
       return const SizedBox(
         width: 80,
         height: 80,
-        child: Center(
-          child: CircularProgressIndicator(),
-        ),
+        child: Center(child: CircularProgressIndicator()),
       );
     }
 
-    return RiveWidget(
-      controller: controller,
-      fit: Fit.contain,
-    );
+    return RiveWidget(controller: controller, fit: Fit.contain);
   }
 }
 
@@ -655,10 +632,7 @@ class _ChoiceCard extends StatelessWidget {
             option.description,
             maxLines: 3,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 12,
-              color: Colors.black54,
-            ),
+            style: const TextStyle(fontSize: 12, color: Colors.black54),
           ),
         ],
       ),
@@ -689,11 +663,7 @@ class _SummaryCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(
-            icon,
-            size: 28,
-            color: const Color(0xFF6C63FF),
-          ),
+          Icon(icon, size: 28, color: const Color(0xFF6C63FF)),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
