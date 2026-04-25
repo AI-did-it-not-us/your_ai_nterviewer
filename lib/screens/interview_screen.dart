@@ -68,6 +68,18 @@ class _InterviewScreenState extends State<InterviewScreen> {
     return '면접';
   }
 
+  String get _appBarTitle {
+    return widget.applicantInfo?.interviewerName ?? '지혜';
+  }
+
+  String get _appBarSubtitle {
+    final applicantInfo = widget.applicantInfo;
+
+    if (applicantInfo == null) return 'AI 면접 연습';
+
+    return '$_interviewTypeText · ${applicantInfo.interviewerStyle} · ${applicantInfo.interviewGoal}';
+  }
+
   Future<void> _loadRive() async {
     final riveFile = await File.asset(
       widget.applicantInfo?.interviewerRivePath ??
@@ -82,7 +94,6 @@ class _InterviewScreenState extends State<InterviewScreen> {
       stateMachineSelector: StateMachineSelector.byName('State Machine'),
     );
 
-    // ignore: deprecated_member_use
     final isTalkingInput = controller.stateMachine.boolean('isTalking');
     isTalkingInput?.value = false;
 
@@ -165,86 +176,72 @@ class _InterviewScreenState extends State<InterviewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final applicantInfo = widget.applicantInfo;
     final controller = _controller;
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.white70,
-        title: const Text('AI 면접 연습'),
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        toolbarHeight: 72,
         centerTitle: true,
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              _appBarTitle,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: Colors.black,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _appBarSubtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Colors.black54,
+              ),
+            ),
+          ],
+        ),
       ),
       body: SafeArea(
         child: Column(
           children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+              child: Container(
+                width: double.infinity,
+                height: 280,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(color: const Color(0xFFE5E7EB)),
+                ),
+                child: _isLoading || controller == null
+                    ? const Center(child: CircularProgressIndicator())
+                    : RiveWidget(controller: controller, fit: Fit.contain),
+              ),
+            ),
             Expanded(
               child: SingleChildScrollView(
                 controller: _scrollController,
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
                 child: Column(
                   children: [
-                    Container(
-                      width: double.infinity,
-                      height: 280,
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(28),
-                        border: Border.all(color: const Color(0xFFE5E7EB)),
-                      ),
-                      child: _isLoading || controller == null
-                          ? const Center(child: CircularProgressIndicator())
-                          : RiveWidget(
-                              controller: controller,
-                              fit: Fit.contain,
-                            ),
-                    ),
-                    const SizedBox(height: 20),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: const Color(0xFFE5E7EB)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            applicantInfo?.interviewerName ?? '지혜',
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          if (applicantInfo != null) ...[
-                            const SizedBox(height: 12),
-                            Text(
-                              '${applicantInfo.interviewerStyle} · ${applicantInfo.interviewGoal}',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: Colors.black54,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Column(
-                      children: [
-                        for (final message in _messages) ...[
-                          _MessageBubble(message: message),
-                          const SizedBox(height: 12),
-                        ],
-                        if (_isWaitingInterviewer) ...[
-                          const SizedBox(height: 4),
-                          const _InterviewerTypingIndicator(),
-                        ],
-                      ],
-                    ),
+                    for (final message in _messages) ...[
+                      _MessageBubble(message: message),
+                      const SizedBox(height: 12),
+                    ],
+                    if (_isWaitingInterviewer) ...[
+                      const SizedBox(height: 4),
+                      const _InterviewerTypingIndicator(),
+                    ],
                   ],
                 ),
               ),
