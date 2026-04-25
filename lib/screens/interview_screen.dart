@@ -303,16 +303,25 @@ class _InterviewScreenState extends State<InterviewScreen> {
       _geminiErrorMessage = liveState.errorMessage;
 
       final responseText = liveState.currentResponseText.trim();
+
       if (responseText.isNotEmpty) {
         final activeIndex = _activeInterviewerMessageIndex;
+
         if (activeIndex == null ||
             activeIndex < 0 ||
             activeIndex >= _messages.length ||
             !_messages[activeIndex].isInterviewer) {
-          _messages.add(
-            _InterviewMessage(isInterviewer: true, text: responseText),
+          final hasSameInterviewerMessage = _messages.any(
+                (message) =>
+            message.isInterviewer && message.text.trim() == responseText,
           );
-          _activeInterviewerMessageIndex = _messages.length - 1;
+
+          if (!hasSameInterviewerMessage) {
+            _messages.add(
+              _InterviewMessage(isInterviewer: true, text: responseText),
+            );
+            _activeInterviewerMessageIndex = _messages.length - 1;
+          }
         } else {
           _messages[activeIndex] = _messages[activeIndex].copyWith(
             text: responseText,
