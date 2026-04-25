@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:rive/rive.dart';
 
 import '../models/applicant_info.dart';
 import 'interview_screen.dart';
@@ -22,15 +23,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final _interviewers = const [
     _InterviewerOption(
       name: '지혜',
+      type: '차분형',
       description: '차분하고 안정적인 분위기로 면접을 진행합니다.',
       rivePath: 'assets/rives/jihye_anchor.riv',
-      icon: Icons.person_rounded,
     ),
     _InterviewerOption(
       name: '서연',
+      type: '친근형',
       description: '밝고 친근한 분위기로 답변을 이끌어줍니다.',
       rivePath: 'assets/rives/seoyeon_anchor.riv',
-      icon: Icons.record_voice_over_rounded,
     ),
   ];
 
@@ -145,7 +146,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       interviewGoal: _selectedGoal.title,
     );
 
-    context.goNamed(InterviewScreen.routeName, extra: applicantInfo);
+    context.goNamed(
+      InterviewScreen.routeName,
+      extra: applicantInfo,
+    );
   }
 
   @override
@@ -157,7 +161,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _TopProgress(currentIndex: _currentIndex, totalCount: 5),
+            _TopProgress(
+              currentIndex: _currentIndex,
+              totalCount: 5,
+            ),
             Expanded(
               child: PageView(
                 controller: _pageController,
@@ -172,6 +179,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     title: '누구와 면접을 볼까요?',
                     description: '면접을 진행할 AI 면접관을 선택해주세요.',
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         for (final interviewer in _interviewers) ...[
                           _InterviewerCard(
@@ -183,7 +191,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                               });
                             },
                           ),
-                          const SizedBox(height: 12),
+                          if (interviewer != _interviewers.last) const SizedBox(height: 12),
                         ],
                       ],
                     ),
@@ -238,7 +246,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       children: [
                         _SummaryCard(
                           title: '면접관',
-                          value: _selectedInterviewer.name,
+                          value:
+                          '${_selectedInterviewer.name} · ${_selectedInterviewer.type}',
                           icon: Icons.person_rounded,
                         ),
                         const SizedBox(height: 12),
@@ -300,7 +309,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 }
 
 class _TopProgress extends StatelessWidget {
-  const _TopProgress({required this.currentIndex, required this.totalCount});
+  const _TopProgress({
+    required this.currentIndex,
+    required this.totalCount,
+  });
 
   final int currentIndex;
   final int totalCount;
@@ -372,7 +384,10 @@ class _OnboardingPage extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             description,
-            style: const TextStyle(fontSize: 15, color: Colors.black54),
+            style: const TextStyle(
+              fontSize: 15,
+              color: Colors.black54,
+            ),
           ),
           const SizedBox(height: 28),
           child,
@@ -385,15 +400,15 @@ class _OnboardingPage extends StatelessWidget {
 class _InterviewerOption {
   const _InterviewerOption({
     required this.name,
+    required this.type,
     required this.description,
     required this.rivePath,
-    required this.icon,
   });
 
   final String name;
+  final String type;
   final String description;
   final String rivePath;
-  final IconData icon;
 }
 
 class _ChoiceOption {
@@ -424,54 +439,130 @@ class _InterviewerCard extends StatelessWidget {
     return _SelectableCard(
       selected: selected,
       onTap: onTap,
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 62,
-            height: 62,
-            decoration: BoxDecoration(
-              color: selected
-                  ? const Color(0xFF6C63FF)
-                  : const Color(0xFFF3F4F6),
-              borderRadius: BorderRadius.circular(22),
-            ),
+          Align(
+            alignment: Alignment.topRight,
             child: Icon(
-              option.icon,
-              size: 32,
-              color: selected ? Colors.white : const Color(0xFF6C63FF),
+              selected
+                  ? Icons.check_circle_rounded
+                  : Icons.radio_button_unchecked_rounded,
+              size: 22,
+              color: selected ? const Color(0xFF6C63FF) : Colors.black26,
             ),
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  option.name,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.black,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  option.description,
-                  style: const TextStyle(fontSize: 13, color: Colors.black54),
-                ),
-              ],
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 130,
+            child: Center(
+              child: _InterviewerRivePreview(
+                rivePath: option.rivePath,
+              ),
             ),
           ),
-          const SizedBox(width: 12),
-          Icon(
-            selected
-                ? Icons.check_circle_rounded
-                : Icons.radio_button_unchecked_rounded,
-            size: 24,
-            color: selected ? const Color(0xFF6C63FF) : Colors.black26,
+          const SizedBox(height: 12),
+          Text(
+            option.name,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: Colors.black,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            option.type,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF6C63FF),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            option.description,
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 12,
+              color: Colors.black54,
+            ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _InterviewerRivePreview extends StatefulWidget {
+  const _InterviewerRivePreview({
+    required this.rivePath,
+  });
+
+  final String rivePath;
+
+  @override
+  State<_InterviewerRivePreview> createState() =>
+      _InterviewerRivePreviewState();
+}
+
+class _InterviewerRivePreviewState extends State<_InterviewerRivePreview> {
+  File? _riveFile;
+  RiveWidgetController? _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRive();
+  }
+
+  Future<void> _loadRive() async {
+    final riveFile = await File.asset(
+      widget.rivePath,
+      riveFactory: Factory.rive,
+    );
+
+    if (riveFile == null) return;
+
+    final controller = RiveWidgetController(
+      riveFile,
+      stateMachineSelector: StateMachineSelector.byName('State Machine'),
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      _riveFile = riveFile;
+      _controller = controller;
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    _riveFile?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = _controller;
+
+    if (controller == null) {
+      return const SizedBox(
+        width: 80,
+        height: 80,
+        child: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    return RiveWidget(
+      controller: controller,
+      fit: Fit.contain,
     );
   }
 }
@@ -564,7 +655,10 @@ class _ChoiceCard extends StatelessWidget {
             option.description,
             maxLines: 3,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 12, color: Colors.black54),
+            style: const TextStyle(
+              fontSize: 12,
+              color: Colors.black54,
+            ),
           ),
         ],
       ),
@@ -595,7 +689,11 @@ class _SummaryCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(icon, size: 28, color: const Color(0xFF6C63FF)),
+          Icon(
+            icon,
+            size: 28,
+            color: const Color(0xFF6C63FF),
+          ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
