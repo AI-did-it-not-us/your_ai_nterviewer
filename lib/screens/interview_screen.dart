@@ -30,7 +30,8 @@ class _InterviewScreenState extends State<InterviewScreen> {
 
   Future<void> _loadRive() async {
     final riveFile = await File.asset(
-      'assets/rives/jihye_anchor.riv',
+      widget.applicantInfo?.interviewerRivePath ??
+          'assets/rives/jihye_anchor.riv',
       riveFactory: Factory.rive,
     );
 
@@ -41,6 +42,7 @@ class _InterviewScreenState extends State<InterviewScreen> {
       stateMachineSelector: StateMachineSelector.byName('State Machine'),
     );
 
+    // ignore: deprecated_member_use
     final isTalkingInput = controller.stateMachine.boolean('isTalking');
     isTalkingInput?.value = false;
 
@@ -117,15 +119,18 @@ class _InterviewScreenState extends State<InterviewScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    '지혜 면접관',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                  Text(
+                    applicantInfo?.interviewerName ?? '지혜',
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   Text(
                     applicantInfo == null
                         ? '자기소개를 1분 이내로 해주세요.'
-                        : '${applicantInfo.companyName} ${applicantInfo.position} 면접을 시작할게요.',
+                        : '${applicantInfo.companyName} 면접을 시작할게요.',
                     style: const TextStyle(
                       fontSize: 16,
                       height: 1.5,
@@ -135,7 +140,7 @@ class _InterviewScreenState extends State<InterviewScreen> {
                   if (applicantInfo != null) ...[
                     const SizedBox(height: 12),
                     Text(
-                      '${applicantInfo.careerLevel} · ${applicantInfo.interviewType}',
+                      '${applicantInfo.interviewerStyle} · ${applicantInfo.interviewGoal}',
                       style: const TextStyle(
                         fontSize: 14,
                         color: Colors.black54,

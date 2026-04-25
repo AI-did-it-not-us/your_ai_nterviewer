@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:introduction_screen/introduction_screen.dart';
 
 import '../models/applicant_info.dart';
 import 'interview_screen.dart';
@@ -16,319 +15,645 @@ class OnboardingScreen extends StatefulWidget {
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
-  final _companyController = TextEditingController();
-  final _positionController = TextEditingController();
-  final _introductionController = TextEditingController();
-  final _goalController = TextEditingController();
+  final PageController _pageController = PageController();
 
-  String _careerLevel = '신입';
-  String _interviewType = '종합 면접';
+  int _currentIndex = 0;
+
+  final _interviewers = const [
+    _InterviewerOption(
+      name: '지혜',
+      description: '차분하고 안정적인 분위기로 면접을 진행합니다.',
+      rivePath: 'assets/rives/jihye_anchor.riv',
+      icon: Icons.person_rounded,
+    ),
+    _InterviewerOption(
+      name: '서연',
+      description: '밝고 친근한 분위기로 답변을 이끌어줍니다.',
+      rivePath: 'assets/rives/seoyeon_anchor.riv',
+      icon: Icons.record_voice_over_rounded,
+    ),
+  ];
+
+  final _styles = const [
+    _ChoiceOption(
+      title: '친절형',
+      description: '편안하게 답변할 수 있도록 부드럽게 질문합니다.',
+      icon: Icons.sentiment_satisfied_alt_rounded,
+    ),
+    _ChoiceOption(
+      title: '차분형',
+      description: '침착하고 안정적인 분위기로 면접을 진행합니다.',
+      icon: Icons.spa_rounded,
+    ),
+    _ChoiceOption(
+      title: '압박형',
+      description: '꼬리질문과 날카로운 질문으로 실전감을 높입니다.',
+      icon: Icons.bolt_rounded,
+    ),
+    _ChoiceOption(
+      title: '실무형',
+      description: '경험, 문제해결력, 협업 역량을 중심으로 질문합니다.',
+      icon: Icons.work_rounded,
+    ),
+  ];
+
+  final _types = const [
+    _ChoiceOption(
+      title: '인성 면접',
+      description: '성격, 가치관, 협업 태도를 중심으로 연습합니다.',
+      icon: Icons.groups_rounded,
+    ),
+    _ChoiceOption(
+      title: '직무 면접',
+      description: '지원 직무와 관련된 경험을 중심으로 연습합니다.',
+      icon: Icons.badge_rounded,
+    ),
+    _ChoiceOption(
+      title: '기술 면접',
+      description: '기술 이해도와 문제해결 과정을 중심으로 연습합니다.',
+      icon: Icons.code_rounded,
+    ),
+    _ChoiceOption(
+      title: '임원 면접',
+      description: '태도, 성장 가능성, 조직 적합성을 중심으로 연습합니다.',
+      icon: Icons.apartment_rounded,
+    ),
+  ];
+
+  final _goals = const [
+    _ChoiceOption(
+      title: '자기소개',
+      description: '첫인상과 말의 흐름을 자연스럽게 다듬습니다.',
+      icon: Icons.face_rounded,
+    ),
+    _ChoiceOption(
+      title: '지원동기',
+      description: '왜 지원했는지 설득력 있게 말하는 연습을 합니다.',
+      icon: Icons.flag_rounded,
+    ),
+    _ChoiceOption(
+      title: '프로젝트 설명',
+      description: '경험과 성과를 구조적으로 설명하는 연습을 합니다.',
+      icon: Icons.layers_rounded,
+    ),
+    _ChoiceOption(
+      title: '실전 연습',
+      description: '실제 면접처럼 질문과 답변을 이어갑니다.',
+      icon: Icons.mic_rounded,
+    ),
+  ];
+
+  late _InterviewerOption _selectedInterviewer = _interviewers.first;
+  late _ChoiceOption _selectedStyle = _styles.first;
+  late _ChoiceOption _selectedType = _types.first;
+  late _ChoiceOption _selectedGoal = _goals.first;
 
   @override
   void dispose() {
-    _companyController.dispose();
-    _positionController.dispose();
-    _introductionController.dispose();
-    _goalController.dispose();
+    _pageController.dispose();
     super.dispose();
   }
 
-  void _startInterview() {
-    final companyName = _companyController.text.trim();
-    final position = _positionController.text.trim();
-    final introduction = _introductionController.text.trim();
-    final goal = _goalController.text.trim();
-
-    if (companyName.isEmpty || position.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('지원 회사와 지원 직무를 입력해주세요.')));
+  void _goNext() {
+    if (_currentIndex == 4) {
+      _startInterview();
       return;
     }
 
+    _pageController.nextPage(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+    );
+  }
+
+  void _goBack() {
+    if (_currentIndex == 0) return;
+
+    _pageController.previousPage(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+    );
+  }
+
+  void _startInterview() {
     final applicantInfo = ApplicantInfo(
-      companyName: companyName,
-      position: position,
-      careerLevel: _careerLevel,
-      interviewType: _interviewType,
-      introduction: introduction,
-      goal: goal,
+      companyName: _selectedType.title,
+      position: _selectedType.title,
+      interviewerName: _selectedInterviewer.name,
+      interviewerRivePath: _selectedInterviewer.rivePath,
+      interviewerStyle: _selectedStyle.title,
+      interviewGoal: _selectedGoal.title,
     );
 
     context.goNamed(InterviewScreen.routeName, extra: applicantInfo);
   }
 
-  PageDecoration get _pageDecoration {
-    return const PageDecoration(
-      titleTextStyle: TextStyle(
-        fontSize: 24,
-        fontWeight: FontWeight.w800,
-        color: Colors.black,
-      ),
-      bodyTextStyle: TextStyle(
-        fontSize: 15,
-        height: 1.5,
-        color: Colors.black54,
-      ),
-      pageColor: Color(0xFFF3F4F6),
-      imagePadding: EdgeInsets.only(top: 32),
-      contentMargin: EdgeInsets.symmetric(horizontal: 20),
-      bodyPadding: EdgeInsets.only(top: 12),
-      titlePadding: EdgeInsets.only(top: 24),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
+    final isLastPage = _currentIndex == 4;
+
     return Scaffold(
-      body: IntroductionScreen(
-        globalBackgroundColor: const Color(0xFFF3F4F6),
-        pages: [
-          PageViewModel(
-            title: '어떤 회사에 지원하나요?',
-            body: '지원 회사와 직무를 입력하면 AI 면접관이 상황에 맞는 질문을 준비해요.',
-            image: const _OnboardingIcon(icon: Icons.business_center_rounded),
-            decoration: _pageDecoration,
-            footer: _OnboardingCard(
-              children: [
-                _AppTextField(
-                  controller: _companyController,
-                  label: '지원 회사',
-                  hintText: '예: 네이버, 카카오, 토스',
-                ),
-                const SizedBox(height: 14),
-                _AppTextField(
-                  controller: _positionController,
-                  label: '지원 직무',
-                  hintText: '예: Flutter 개발자, 프론트엔드 개발자',
-                ),
-              ],
+      backgroundColor: const Color(0xFFF3F4F6),
+      body: SafeArea(
+        child: Column(
+          children: [
+            _TopProgress(currentIndex: _currentIndex, totalCount: 5),
+            Expanded(
+              child: PageView(
+                controller: _pageController,
+                onPageChanged: (index) {
+                  setState(() {
+                    _currentIndex = index;
+                  });
+                },
+                children: [
+                  _OnboardingPage(
+                    step: '1단계',
+                    title: '누구와 면접을 볼까요?',
+                    description: '면접을 진행할 AI 면접관을 선택해주세요.',
+                    child: Column(
+                      children: [
+                        for (final interviewer in _interviewers) ...[
+                          _InterviewerCard(
+                            option: interviewer,
+                            selected: _selectedInterviewer == interviewer,
+                            onTap: () {
+                              setState(() {
+                                _selectedInterviewer = interviewer;
+                              });
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                      ],
+                    ),
+                  ),
+                  _OnboardingPage(
+                    step: '2단계',
+                    title: '면접관 스타일을 선택하세요',
+                    description: '원하는 분위기에 맞춰 질문 방식이 달라집니다.',
+                    child: _ChoiceGrid(
+                      options: _styles,
+                      selectedOption: _selectedStyle,
+                      onSelected: (option) {
+                        setState(() {
+                          _selectedStyle = option;
+                        });
+                      },
+                    ),
+                  ),
+                  _OnboardingPage(
+                    step: '3단계',
+                    title: '어떤 면접을 준비하나요?',
+                    description: '준비하려는 면접 유형을 선택해주세요.',
+                    child: _ChoiceGrid(
+                      options: _types,
+                      selectedOption: _selectedType,
+                      onSelected: (option) {
+                        setState(() {
+                          _selectedType = option;
+                        });
+                      },
+                    ),
+                  ),
+                  _OnboardingPage(
+                    step: '4단계',
+                    title: '오늘의 목표는 무엇인가요?',
+                    description: '가장 연습하고 싶은 목표를 선택해주세요.',
+                    child: _ChoiceGrid(
+                      options: _goals,
+                      selectedOption: _selectedGoal,
+                      onSelected: (option) {
+                        setState(() {
+                          _selectedGoal = option;
+                        });
+                      },
+                    ),
+                  ),
+                  _OnboardingPage(
+                    step: '5단계',
+                    title: '설정을 확인해주세요',
+                    description: '선택한 설정으로 면접 연습을 시작합니다.',
+                    child: Column(
+                      children: [
+                        _SummaryCard(
+                          title: '면접관',
+                          value: _selectedInterviewer.name,
+                          icon: Icons.person_rounded,
+                        ),
+                        const SizedBox(height: 12),
+                        _SummaryCard(
+                          title: '면접관 스타일',
+                          value: _selectedStyle.title,
+                          icon: Icons.psychology_alt_rounded,
+                        ),
+                        const SizedBox(height: 12),
+                        _SummaryCard(
+                          title: '면접 유형',
+                          value: _selectedType.title,
+                          icon: Icons.business_center_rounded,
+                        ),
+                        const SizedBox(height: 12),
+                        _SummaryCard(
+                          title: '면접 목표',
+                          value: _selectedGoal.title,
+                          icon: Icons.flag_rounded,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          PageViewModel(
-            title: '면접 유형을 선택해주세요',
-            body: '지원자의 경력과 면접 유형에 맞춰 질문 난이도를 조정해요.',
-            image: const _OnboardingIcon(icon: Icons.tune_rounded),
-            decoration: _pageDecoration,
-            footer: _OnboardingCard(
-              children: [
-                _AppDropdownField(
-                  label: '경력 수준',
-                  value: _careerLevel,
-                  items: const ['신입', '주니어', '미들', '시니어'],
-                  onChanged: (value) {
-                    if (value == null) return;
-
-                    setState(() {
-                      _careerLevel = value;
-                    });
-                  },
-                ),
-                const SizedBox(height: 14),
-                _AppDropdownField(
-                  label: '면접 유형',
-                  value: _interviewType,
-                  items: const ['종합 면접', '인성 면접', '기술 면접', '직무 면접', '임원 면접'],
-                  onChanged: (value) {
-                    if (value == null) return;
-
-                    setState(() {
-                      _interviewType = value;
-                    });
-                  },
-                ),
-              ],
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+              child: Row(
+                children: [
+                  if (_currentIndex != 0)
+                    Expanded(
+                      child: SizedBox(
+                        height: 54,
+                        child: OutlinedButton(
+                          onPressed: _goBack,
+                          child: const Text('이전'),
+                        ),
+                      ),
+                    ),
+                  if (_currentIndex != 0) const SizedBox(width: 12),
+                  Expanded(
+                    child: SizedBox(
+                      height: 54,
+                      child: FilledButton(
+                        onPressed: _goNext,
+                        child: Text(isLastPage ? '면접 시작' : '다음'),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          PageViewModel(
-            title: '면접 목표를 알려주세요',
-            body: '자기소개와 목표를 입력하면 더 현실적인 질문을 만들 수 있어요.',
-            image: const _OnboardingIcon(icon: Icons.record_voice_over_rounded),
-            decoration: _pageDecoration,
-            footer: _OnboardingCard(
-              children: [
-                _AppTextField(
-                  controller: _introductionController,
-                  label: '간단한 자기소개',
-                  hintText: '예: Flutter 앱 개발을 공부하고 있습니다.',
-                  maxLines: 3,
-                ),
-                const SizedBox(height: 14),
-                _AppTextField(
-                  controller: _goalController,
-                  label: '면접 목표',
-                  hintText: '예: 프로젝트 설명을 자연스럽게 하고 싶어요.',
-                  maxLines: 3,
-                ),
-              ],
-            ),
-          ),
-        ],
-        showBackButton: true,
-        back: const Text(
-          '이전',
-          style: TextStyle(
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF6C63FF),
-          ),
-        ),
-        next: const Text(
-          '다음',
-          style: TextStyle(
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF6C63FF),
-          ),
-        ),
-        done: const Text(
-          '시작하기',
-          style: TextStyle(
-            fontWeight: FontWeight.w800,
-            color: Color(0xFF6C63FF),
-          ),
-        ),
-        onDone: _startInterview,
-        dotsDecorator: DotsDecorator(
-          size: const Size.square(8),
-          activeSize: const Size(22, 8),
-          activeColor: const Color(0xFF6C63FF),
-          color: const Color(0xFFD1D5DB),
-          spacing: const EdgeInsets.symmetric(horizontal: 4),
-          activeShape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(999),
-          ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _OnboardingIcon extends StatelessWidget {
-  const _OnboardingIcon({required this.icon});
+class _TopProgress extends StatelessWidget {
+  const _TopProgress({required this.currentIndex, required this.totalCount});
 
+  final int currentIndex;
+  final int totalCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+      child: Row(
+        children: [
+          for (int index = 0; index < totalCount; index++) ...[
+            Expanded(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                height: 5,
+                decoration: BoxDecoration(
+                  color: index <= currentIndex
+                      ? const Color(0xFF6C63FF)
+                      : const Color(0xFFD1D5DB),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+            if (index != totalCount - 1) const SizedBox(width: 6),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _OnboardingPage extends StatelessWidget {
+  const _OnboardingPage({
+    required this.step,
+    required this.title,
+    required this.description,
+    required this.child,
+  });
+
+  final String step;
+  final String title;
+  final String description;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            step,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF6C63FF),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.w800,
+              color: Colors.black,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            description,
+            style: const TextStyle(fontSize: 15, color: Colors.black54),
+          ),
+          const SizedBox(height: 28),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _InterviewerOption {
+  const _InterviewerOption({
+    required this.name,
+    required this.description,
+    required this.rivePath,
+    required this.icon,
+  });
+
+  final String name;
+  final String description;
+  final String rivePath;
+  final IconData icon;
+}
+
+class _ChoiceOption {
+  const _ChoiceOption({
+    required this.title,
+    required this.description,
+    required this.icon,
+  });
+
+  final String title;
+  final String description;
+  final IconData icon;
+}
+
+class _InterviewerCard extends StatelessWidget {
+  const _InterviewerCard({
+    required this.option,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final _InterviewerOption option;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SelectableCard(
+      selected: selected,
+      onTap: onTap,
+      child: Row(
+        children: [
+          Container(
+            width: 62,
+            height: 62,
+            decoration: BoxDecoration(
+              color: selected
+                  ? const Color(0xFF6C63FF)
+                  : const Color(0xFFF3F4F6),
+              borderRadius: BorderRadius.circular(22),
+            ),
+            child: Icon(
+              option.icon,
+              size: 32,
+              color: selected ? Colors.white : const Color(0xFF6C63FF),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  option.name,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.black,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  option.description,
+                  style: const TextStyle(fontSize: 13, color: Colors.black54),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Icon(
+            selected
+                ? Icons.check_circle_rounded
+                : Icons.radio_button_unchecked_rounded,
+            size: 24,
+            color: selected ? const Color(0xFF6C63FF) : Colors.black26,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChoiceGrid extends StatelessWidget {
+  const _ChoiceGrid({
+    required this.options,
+    required this.selectedOption,
+    required this.onSelected,
+  });
+
+  final List<_ChoiceOption> options;
+  final _ChoiceOption selectedOption;
+  final ValueChanged<_ChoiceOption> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.builder(
+      itemCount: options.length,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 0.92,
+      ),
+      itemBuilder: (context, index) {
+        final option = options[index];
+
+        return _ChoiceCard(
+          option: option,
+          selected: selectedOption == option,
+          onTap: () {
+            onSelected(option);
+          },
+        );
+      },
+    );
+  }
+}
+
+class _ChoiceCard extends StatelessWidget {
+  const _ChoiceCard({
+    required this.option,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final _ChoiceOption option;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SelectableCard(
+      selected: selected,
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                option.icon,
+                size: 30,
+                color: selected ? const Color(0xFF6C63FF) : Colors.black54,
+              ),
+              const Spacer(),
+              Icon(
+                selected
+                    ? Icons.check_circle_rounded
+                    : Icons.radio_button_unchecked_rounded,
+                size: 22,
+                color: selected ? const Color(0xFF6C63FF) : Colors.black26,
+              ),
+            ],
+          ),
+          const Spacer(),
+          Text(
+            option.title,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: Colors.black,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            option.description,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 12, color: Colors.black54),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryCard extends StatelessWidget {
+  const _SummaryCard({
+    required this.title,
+    required this.value,
+    required this.icon,
+  });
+
+  final String title;
+  final String value;
   final IconData icon;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 132,
-      height: 132,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(36),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x14000000),
-            blurRadius: 18,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Icon(icon, size: 56, color: const Color(0xFF6C63FF)),
-    );
-  }
-}
-
-class _OnboardingCard extends StatelessWidget {
-  const _OnboardingCard({required this.children});
-
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
       width: double.infinity,
-      margin: const EdgeInsets.only(top: 24),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
-      child: Column(children: children),
-    );
-  }
-}
-
-class _AppTextField extends StatelessWidget {
-  const _AppTextField({
-    required this.controller,
-    required this.label,
-    required this.hintText,
-    this.maxLines = 1,
-  });
-
-  final TextEditingController controller;
-  final String label;
-  final String hintText;
-  final int maxLines;
-
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      maxLines: maxLines,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hintText,
-        filled: true,
-        fillColor: const Color(0xFFF9FAFB),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
-          borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
-          borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
-          borderSide: const BorderSide(color: Color(0xFF6C63FF), width: 1.5),
-        ),
+      child: Row(
+        children: [
+          Icon(icon, size: 28, color: const Color(0xFF6C63FF)),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Colors.black54,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 17,
+                    color: Colors.black,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _AppDropdownField extends StatelessWidget {
-  const _AppDropdownField({
-    required this.label,
-    required this.value,
-    required this.items,
-    required this.onChanged,
+class _SelectableCard extends StatelessWidget {
+  const _SelectableCard({
+    required this.selected,
+    required this.onTap,
+    required this.child,
   });
 
-  final String label;
-  final String value;
-  final List<String> items;
-  final ValueChanged<String?> onChanged;
+  final bool selected;
+  final VoidCallback onTap;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    return DropdownButtonFormField<String>(
-      value: value,
-      items: items
-          .map(
-            (item) => DropdownMenuItem<String>(value: item, child: Text(item)),
-          )
-          .toList(),
-      onChanged: onChanged,
-      decoration: InputDecoration(
-        labelText: label,
-        filled: true,
-        fillColor: const Color(0xFFF9FAFB),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
-          borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFF0EFFF) : Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color: selected ? const Color(0xFF6C63FF) : const Color(0xFFE5E7EB),
+            width: selected ? 1.6 : 1,
+          ),
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
-          borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
-          borderSide: const BorderSide(color: Color(0xFF6C63FF), width: 1.5),
-        ),
+        child: child,
       ),
     );
   }

@@ -1,17 +1,17 @@
 class ApplicantInfo {
   const ApplicantInfo({
     required this.companyName,
-    required this.position,
-    required this.careerLevel,
-    required this.interviewType,
-    required this.introduction,
-    required this.goal,
+    this.position = '',
+    required this.interviewerName,
+    required this.interviewerRivePath,
+    required this.interviewerStyle,
+    required this.interviewGoal,
   });
 
   final String companyName;
   final String position;
-  final String careerLevel;
-  final String interviewType;
-  final String introduction;
-  final String goal;
+  final String interviewerName;
+  final String interviewerRivePath;
+  final String interviewerStyle;
+  final String interviewGoal;
 }
