@@ -1,11 +1,15 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:rive/rive.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../models/applicant_info.dart';
+import '../models/interview_feedback.dart';
+import '../models/interview_session_progress.dart';
 import '../services/gemini_live_interview_service.dart';
+import 'feedback_screen.dart';
 
 class InterviewScreen extends StatefulWidget {
   const InterviewScreen({super.key, required this.applicantInfo});
@@ -26,6 +30,7 @@ class _InterviewScreenState extends State<InterviewScreen> {
   final stt.SpeechToText _speechToText = stt.SpeechToText();
   final GeminiLiveInterviewService _geminiService =
       GeminiLiveInterviewService();
+  final InterviewSessionProgress _progress = const InterviewSessionProgress();
   Timer? _submitGraceTimer;
 
   File? _riveFile;
@@ -40,11 +45,13 @@ class _InterviewScreenState extends State<InterviewScreen> {
   bool _isWaitingSubmitGrace = false;
 
   String _currentAnswerText = '';
+  String _currentQuestionText = '';
   String? _speechErrorMessage;
   String? _geminiErrorMessage;
   int? _activeInterviewerMessageIndex;
 
   final List<_InterviewMessage> _messages = [];
+  final List<InterviewExchange> _exchanges = [];
 
   @override
   void initState() {
@@ -56,12 +63,9 @@ class _InterviewScreenState extends State<InterviewScreen> {
   }
 
   void _initMessages() {
-    _messages.add(
-      _InterviewMessage(
-        isInterviewer: true,
-        text: '$_interviewTypeText을 시작하겠습니다. 먼저 자기소개를 해주세요.',
-      ),
-    );
+    final introQuestion = '$_interviewTypeText을 시작하겠습니다. 먼저 자기소개를 해주세요.';
+    _currentQuestionText = introQuestion;
+    _messages.add(_InterviewMessage(isInterviewer: true, text: introQuestion));
   }
 
   String get _interviewTypeText {
@@ -84,6 +88,10 @@ class _InterviewScreenState extends State<InterviewScreen> {
     if (applicantInfo == null) return 'AI 면접 연습';
 
     return '$_interviewTypeText · ${applicantInfo.interviewerStyle} · ${applicantInfo.interviewGoal}';
+  }
+
+  int get _followUpAnswerCount {
+    return _progress.followUpAnswerCount(_exchanges.length);
   }
 
   Future<void> _loadRive() async {
@@ -276,19 +284,51 @@ class _InterviewScreenState extends State<InterviewScreen> {
   }
 
   Future<void> _submitAnswer(String answerText) async {
+    final exchange = InterviewExchange(
+      question: _currentQuestionText,
+      answer: answerText,
+    );
+    final nextExchangeCount = _exchanges.length + 1;
+    final shouldFinish = _progress.shouldFinish(nextExchangeCount);
+
     setState(() {
+      _exchanges.add(exchange);
       _messages.add(_InterviewMessage(isInterviewer: false, text: answerText));
       _currentAnswerText = '';
-      _isWaitingInterviewer = true;
+      _isWaitingInterviewer = !shouldFinish;
       _activeInterviewerMessageIndex = null;
       _geminiErrorMessage = null;
     });
 
     _scrollToBottom();
 
+    if (shouldFinish) {
+      await _goToFeedback();
+      return;
+    }
+
     await _geminiService.sendUserText(
       text: answerText,
       applicantInfo: widget.applicantInfo,
+    );
+  }
+
+  Future<void> _goToFeedback() async {
+    _submitGraceTimer?.cancel();
+    _submitGraceTimer = null;
+
+    if (_speechToText.isListening) {
+      await _speechToText.stop();
+    }
+
+    if (!mounted) return;
+
+    context.goNamed(
+      FeedbackScreen.routeName,
+      extra: InterviewFeedbackPayload(
+        applicantInfo: widget.applicantInfo,
+        exchanges: List.unmodifiable(_exchanges),
+      ),
     );
   }
 
@@ -305,6 +345,7 @@ class _InterviewScreenState extends State<InterviewScreen> {
       final responseText = liveState.currentResponseText.trim();
 
       if (responseText.isNotEmpty) {
+        _currentQuestionText = responseText;
         final activeIndex = _activeInterviewerMessageIndex;
 
         if (activeIndex == null ||
@@ -312,8 +353,8 @@ class _InterviewScreenState extends State<InterviewScreen> {
             activeIndex >= _messages.length ||
             !_messages[activeIndex].isInterviewer) {
           final hasSameInterviewerMessage = _messages.any(
-                (message) =>
-            message.isInterviewer && message.text.trim() == responseText,
+            (message) =>
+                message.isInterviewer && message.text.trim() == responseText,
           );
 
           if (!hasSameInterviewerMessage) {
@@ -415,6 +456,13 @@ class _InterviewScreenState extends State<InterviewScreen> {
                 child: _isLoading || controller == null
                     ? const Center(child: CircularProgressIndicator())
                     : RiveWidget(controller: controller, fit: Fit.contain),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+              child: _InterviewProgressBar(
+                current: _followUpAnswerCount,
+                total: _progress.maxFollowUpAnswers,
               ),
             ),
             Expanded(
@@ -532,6 +580,71 @@ class _InterviewMessage {
     return _InterviewMessage(
       isInterviewer: isInterviewer,
       text: text ?? this.text,
+    );
+  }
+}
+
+class _InterviewProgressBar extends StatelessWidget {
+  const _InterviewProgressBar({required this.current, required this.total});
+
+  final int current;
+  final int total;
+
+  @override
+  Widget build(BuildContext context) {
+    final safeTotal = total == 0 ? 1 : total;
+    final ratio = (current / safeTotal).clamp(0.0, 1.0);
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.fact_check_rounded,
+                size: 18,
+                color: Color(0xFF6C63FF),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '꼬리질문 진행 $current/$total',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.black87,
+                  ),
+                ),
+              ),
+              const Text(
+                '완료 후 피드백',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.black45,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: ratio,
+              minHeight: 7,
+              backgroundColor: const Color(0xFFE5E7EB),
+              valueColor: const AlwaysStoppedAnimation(Color(0xFF6C63FF)),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

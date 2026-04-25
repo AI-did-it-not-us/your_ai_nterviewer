@@ -43,6 +43,7 @@ dependencies:
   flutter_launcher_icons: ^0.14.4
   web_socket_channel: ^3.0.3
   flutter_pcm_sound: ^3.3.3
+  http: ^1.6.0
 
 dev_dependencies:
   flutter_test:
