@@ -219,11 +219,6 @@ class GeminiLiveInterviewService extends ChangeNotifier {
     if (parts is List) {
       for (final part in parts) {
         final partMap = _asMap(part);
-        final text = partMap?['text'];
-        if (text is String && text.trim().isNotEmpty) {
-          _appendResponseText(text);
-        }
-
         final inlineData = _asMap(partMap?['inlineData']);
         final data = inlineData?['data'];
         if (data is String && data.isNotEmpty) {

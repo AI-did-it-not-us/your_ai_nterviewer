@@ -20,10 +20,13 @@ class InterviewScreen extends StatefulWidget {
 }
 
 class _InterviewScreenState extends State<InterviewScreen> {
+  static const Duration _submitGraceDuration = Duration(seconds: 5);
+
   final ScrollController _scrollController = ScrollController();
   final stt.SpeechToText _speechToText = stt.SpeechToText();
   final GeminiLiveInterviewService _geminiService =
       GeminiLiveInterviewService();
+  Timer? _submitGraceTimer;
 
   File? _riveFile;
   RiveWidgetController? _controller;
@@ -34,6 +37,7 @@ class _InterviewScreenState extends State<InterviewScreen> {
   bool _isListening = false;
   bool _isFinalizingSpeech = false;
   bool _isWaitingInterviewer = false;
+  bool _isWaitingSubmitGrace = false;
 
   String _currentAnswerText = '';
   String? _speechErrorMessage;
@@ -116,16 +120,20 @@ class _InterviewScreenState extends State<InterviewScreen> {
         if (status == stt.SpeechToText.doneStatus ||
             status == stt.SpeechToText.notListeningStatus) {
           if (_isListening) {
-            unawaited(_finishListeningAndSubmit());
+            _scheduleSubmitAfterGrace();
           }
         }
       },
       onError: (error) {
         if (!mounted) return;
 
+        _submitGraceTimer?.cancel();
+        _submitGraceTimer = null;
+
         setState(() {
           _isListening = false;
           _isFinalizingSpeech = false;
+          _isWaitingSubmitGrace = false;
           _speechErrorMessage = error.errorMsg;
         });
       },
@@ -141,7 +149,7 @@ class _InterviewScreenState extends State<InterviewScreen> {
   Future<void> _handleMicTap() async {
     if (_isWaitingInterviewer) return;
 
-    if (_isListening) {
+    if (_isListening || _isWaitingSubmitGrace) {
       await _finishListeningAndSubmit();
       return;
     }
@@ -150,6 +158,9 @@ class _InterviewScreenState extends State<InterviewScreen> {
   }
 
   Future<void> _startListening() async {
+    _submitGraceTimer?.cancel();
+    _submitGraceTimer = null;
+
     if (!_geminiService.hasApiKey) {
       setState(() {
         _geminiErrorMessage =
@@ -174,6 +185,7 @@ class _InterviewScreenState extends State<InterviewScreen> {
     setState(() {
       _isListening = true;
       _isFinalizingSpeech = false;
+      _isWaitingSubmitGrace = false;
       _currentAnswerText = '';
       _speechErrorMessage = null;
       _geminiErrorMessage = null;
@@ -182,7 +194,7 @@ class _InterviewScreenState extends State<InterviewScreen> {
     await _speechToText.listen(
       localeId: 'ko_KR',
       listenFor: const Duration(seconds: 90),
-      pauseFor: const Duration(seconds: 5),
+      pauseFor: _submitGraceDuration,
       listenOptions: stt.SpeechListenOptions(
         partialResults: true,
         listenMode: stt.ListenMode.dictation,
@@ -195,15 +207,41 @@ class _InterviewScreenState extends State<InterviewScreen> {
           _currentAnswerText = result.recognizedWords;
         });
 
-        if (result.finalResult) {
-          unawaited(_finishListeningAndSubmit());
+        if (result.recognizedWords.trim().isNotEmpty) {
+          _scheduleSubmitAfterGrace();
         }
       },
     );
   }
 
+  void _scheduleSubmitAfterGrace() {
+    if (_isFinalizingSpeech || _isWaitingInterviewer) {
+      return;
+    }
+
+    final answerText = _currentAnswerText.trim();
+    _submitGraceTimer?.cancel();
+    _submitGraceTimer = null;
+
+    if (!mounted) return;
+
+    setState(() {
+      _isListening = _speechToText.isListening;
+      _isWaitingSubmitGrace = answerText.isNotEmpty;
+    });
+
+    if (answerText.isEmpty) return;
+
+    _submitGraceTimer = Timer(_submitGraceDuration, () {
+      unawaited(_finishListeningAndSubmit());
+    });
+  }
+
   Future<void> _finishListeningAndSubmit() async {
     if (_isFinalizingSpeech) return;
+
+    _submitGraceTimer?.cancel();
+    _submitGraceTimer = null;
 
     _isFinalizingSpeech = true;
     final answerText = _currentAnswerText.trim();
@@ -219,6 +257,7 @@ class _InterviewScreenState extends State<InterviewScreen> {
 
     setState(() {
       _isListening = false;
+      _isWaitingSubmitGrace = false;
     });
 
     if (answerText.isEmpty) {
@@ -303,6 +342,7 @@ class _InterviewScreenState extends State<InterviewScreen> {
 
   @override
   void dispose() {
+    _submitGraceTimer?.cancel();
     _speechToText.cancel();
     _geminiService.removeListener(_handleGeminiChanged);
     _geminiService.dispose();
@@ -378,7 +418,7 @@ class _InterviewScreenState extends State<InterviewScreen> {
                       _MessageBubble(message: message),
                       const SizedBox(height: 12),
                     ],
-                    if (_isListening) ...[
+                    if (_isListening || _isWaitingSubmitGrace) ...[
                       _ListeningDraftBubble(text: _currentAnswerText),
                       const SizedBox(height: 12),
                     ],
@@ -411,12 +451,16 @@ class _InterviewScreenState extends State<InterviewScreen> {
                         shape: BoxShape.circle,
                         color: _isWaitingInterviewer
                             ? const Color(0xFFE5E7EB)
+                            : _isWaitingSubmitGrace
+                            ? const Color(0xFFFFF7ED)
                             : _isListening
                             ? const Color(0xFFFFE5E5)
                             : const Color(0xFF6C63FF),
                         border: Border.all(
                           color: _isWaitingInterviewer
                               ? const Color(0xFFD1D5DB)
+                              : _isWaitingSubmitGrace
+                              ? const Color(0xFFF59E0B)
                               : _isListening
                               ? const Color(0xFFFF4D4D)
                               : const Color(0xFF6C63FF),
@@ -426,12 +470,16 @@ class _InterviewScreenState extends State<InterviewScreen> {
                       child: Icon(
                         _isWaitingInterviewer
                             ? Icons.hourglass_top_rounded
+                            : _isWaitingSubmitGrace
+                            ? Icons.send_rounded
                             : _isListening
                             ? Icons.send_rounded
                             : Icons.mic_rounded,
                         size: 34,
                         color: _isWaitingInterviewer
                             ? Colors.black45
+                            : _isWaitingSubmitGrace
+                            ? const Color(0xFFF59E0B)
                             : _isListening
                             ? const Color(0xFFFF4D4D)
                             : Colors.white,
@@ -442,6 +490,10 @@ class _InterviewScreenState extends State<InterviewScreen> {
                   Text(
                     _isWaitingInterviewer
                         ? '면접관이 답변 중입니다'
+                        : _isWaitingSubmitGrace
+                        ? _isListening
+                              ? '멈추면 5초 뒤 전송 · 탭해서 바로 전송'
+                              : '5초 뒤 전송됩니다 · 탭해서 바로 전송'
                         : _isListening
                         ? '탭해서 답변 전송'
                         : '탭해서 답변하기',

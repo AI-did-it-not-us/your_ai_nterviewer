@@ -20,5 +20,7 @@ void main() {
     expect(prompt, contains('면접관 스타일: 실무형'));
     expect(prompt, contains('면접 목표: 프로젝트 설명'));
     expect(prompt, contains('한 번에 하나의 꼬리질문'));
+    expect(prompt, contains('최종 질문 문장만 한국어'));
+    expect(prompt, contains('reasoning'));
   });
 }
